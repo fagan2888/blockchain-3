@@ -1,5 +1,6 @@
 import hashlib
 import json
+import requests
 from time import time
 from uuid import uuid4
 from urllib.parse import urlparse
@@ -97,3 +98,68 @@ class Blockchain(object):
 		parsed_url = urlparse(address)
 
 		self.nodes.add(parsed_url.netloc)
+
+
+	"""
+	Determine if a given blockchain is valid
+	:param chain: <list> A blockchain
+	:return: <bool> True if valid, False if not
+	"""
+	def valid_chain(self, chain):
+		last_block = chain[0]
+
+		current_index = 1
+
+		while current_index < len(chain):
+			block = chain[current_index]
+			print(last_block)
+			print(block)
+
+			# Check that the hash of the block is correct
+			if block["previous_hash"] != self.hash(last_block):
+				return False
+
+			# Check that the proof of work is correct:
+			if not self.valid_proof(last_block["proof"], block["proof"]):
+				return False
+
+
+			last_block = block
+			current_index += 1
+
+		return True
+
+	"""
+	This is the consensus algorithm which resolves conflicts
+	by replacing the chain with the longest one in the network.
+
+	:return: <bool> True if our chain was replaced, False if not
+	"""
+	def resolve_conflicts(self):
+		neighbors = self.nodes
+
+		new_chain = None
+
+		# Find the longest chain
+		max_length = len(self.chain)
+
+
+		# Check and verify the chains from all the nodes in network
+		for node in neighbors:
+			response = requests.get("http://" + node + "/chain")
+
+			if response.status_code == 200:
+				length = response.json()["length"]
+				chain = response.json()["chain"]
+
+				# Check if the length is longer and the chain is valid
+				if length > max_length and self.valid_chain(chain):
+					max_length = length
+					new_chain = chain
+
+		# Replace chain if we find a new valid longer chain
+		if new_chain:
+			self.chain = new_chain
+			return True
+
+		return False
